@@ -66,42 +66,72 @@ async function chooseStudent(student){
   $('beginTyping').onclick=startTyping;
 }
 
+let typedCount = 0;
+let lastFlash = null;
+let activeElapsedMs = 0;
+let lastActivityAt = 0;
+let audioCtx = null;
+const keyRows = ['ЙЦУКЕНГШЩЗХЪ','ФЫВАПРОЛДЖЭ','ЯЧСМИТЬБЮ'];
+const codeMap = {KeyQ:'Й',KeyW:'Ц',KeyE:'У',KeyR:'К',KeyT:'Е',KeyY:'Н',KeyU:'Г',KeyI:'Ш',KeyO:'Щ',KeyP:'З',BracketLeft:'Х',BracketRight:'Ъ',KeyA:'Ф',KeyS:'Ы',KeyD:'В',KeyF:'А',KeyG:'П',KeyH:'Р',KeyJ:'О',KeyK:'Л',KeyL:'Д',Semicolon:'Ж',Quote:'Э',KeyZ:'Я',KeyX:'Ч',KeyC:'С',KeyV:'М',KeyB:'И',KeyN:'Т',KeyM:'Ь',Comma:'Б',Period:'Ю',Backquote:'Е'};
+const punctuation = ',.!?;:()-«»—"';
+const normChar = c => c === 'Ё' || c === 'ё' ? 'Е' : String(c).toUpperCase();
+function candidatesFor(e){
+  const out=[]; const k=e.key;
+  if(k===' ') out.push(' ');
+  else if(k && /^[а-яё]$/i.test(k)) out.push(normChar(k));
+  else if(k && /^[0-9.,!?;:()\-—«»"]$/.test(k)) out.push(k);
+  if(codeMap[e.code]) out.push(normChar(codeMap[e.code]));
+  return [...new Set(out)];
+}
+function currentChar(){return currentLesson.content[typedCount] ?? '';}
+function neededKey(c){return c===' '?'space':normChar(c);}
+function playTone(kind='hit'){
+  if(!soundOn)return;
+  try{audioCtx ||= new (window.AudioContext||window.webkitAudioContext)();const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.type='sine';o.frequency.value=kind==='miss'?170:kind==='win'?740:520;g.gain.setValueAtTime(.0001,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.09,audioCtx.currentTime+.01);g.gain.exponentialRampToValueAtTime(.0001,audioCtx.currentTime+(kind==='miss'?.12:.08));o.start();o.stop(audioCtx.currentTime+.14);}catch{}
+}
 function startTyping(){
-  remaining=600;startedAt=Date.now();resultSaved=false;mistakeCount=0;
+  remaining=600;startedAt=Date.now();lastActivityAt=Date.now();activeElapsedMs=0;resultSaved=false;mistakeCount=0;typedCount=0;lastFlash=null;
   const target=currentLesson.content;
-  setPanel(`<div class="timerline"><div class="ph"><span class="tag">${esc(currentGroup.name)} · ${esc(currentStudent.display_name)}</span><h2>${esc(currentLesson.title)}</h2><p class="sub">Печатай текст в поле ниже. Ошибки можно исправлять клавишей Backspace.</p></div><div class="timerchip run" id="timerChip"><i class="dot"></i><span id="timerText">10:00</span></div></div><div class="tp-sec"><div class="sub">ТЕКСТ ДЛЯ ПЕЧАТИ</div><div class="preview" style="max-height:180px">${esc(target)}</div></div><div class="stats"><span class="stat">Скорость <b id="liveSpeed">0</b> зн./мин</span><span class="stat">Ошибки <b id="liveErrors">0</b></span><span class="stat">Точность <b id="liveAccuracy">100%</b></span></div><div class="meter"><i id="progressMeter"></i></div><textarea class="type-input" id="typingInput" placeholder="Начинай печатать здесь…" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea><div class="row"><span class="helper">Время идёт, даже если ты делаешь паузу.</span><button class="btn good" id="finishTyping">Завершить занятие</button></div>`);
-  const input=$('typingInput');input.focus();
-  input.addEventListener('beforeinput', (event) => {
-    if (!event.inputType || !event.inputType.startsWith('insert')) return;
-    let inserted = event.data;
-    if (inserted == null && event.inputType === 'insertFromPaste') inserted = (event.clipboardData || window.clipboardData)?.getData('text') || '';
-    if (inserted == null) return;
-    const pos = input.selectionStart || 0;
-    for (let i=0;i<inserted.length;i++) if (target[pos+i] !== inserted[i]) mistakeCount++;
-  });
-  input.addEventListener('input',updateLiveStats);
+  const chars=[...new Set(target.split('').filter(c=>/^[0-9]$/.test(c)))];
+  const marks=[...new Set(target.split('').filter(c=>punctuation.includes(c)))];
+  const keyButton=(label,cls='')=>`<button type="button" class="kid-key ${cls}" data-key="${esc(label)}">${label==='space'?'ПРОБЕЛ':esc(label)}</button>`;
+  const rows=[];
+  if(chars.length)rows.push(`<div class="kid-key-row">${chars.map(c=>keyButton(c)).join('')}</div>`);
+  keyRows.forEach((row)=>{const present=[...row].filter(c=>target.toUpperCase().includes(c)|| (c==='Е'&&/[Ёё]/.test(target)));if(present.length)rows.push(`<div class="kid-key-row">${present.map(c=>keyButton(c, 'letter-key '+('ХЪЖЭ'.includes(c)?'wide':''))).join('')}</div>`);});
+  if(marks.length)rows.push(`<div class="kid-key-row">${marks.map(c=>keyButton(c,'punct-key')).join('')}</div>`);
+  rows.push(`<div class="kid-key-row">${keyButton('space','space-key')}</div>`);
+  setPanel(`<div class="kid-trainer"><div class="kid-top"><div><span class="tag">${esc(currentGroup.name)} · ${esc(currentStudent.display_name)}</span><h2>${esc(currentLesson.title)}</h2><p class="sub">Найди жёлтую клавишу и нажми её на клавиатуре.</p></div><div class="timerchip run" id="timerChip"><i class="dot"></i><span id="timerText">10:00</span></div></div><div class="kid-text-wrap" id="kidTextWrap"><div class="kid-text-window" id="kidTextWindow"><div class="kid-text-line" id="kidTextLine"></div></div></div><div class="kid-progress"><div class="kid-progress-track"><i id="progressMeter"></i></div><div class="kid-progress-label" id="progressLabel">Напечатано 0 из ${[...target].length} знаков</div></div><div class="kid-stats"><div>Скорость <b id="liveSpeed">—</b> зн./мин</div><div>Точность <b id="liveAccuracy">100%</b></div><div>Ошибки <b id="liveErrors">0</b></div></div><div class="kid-hint" id="kidHint">Начинай! Ищи жёлтую клавишу.</div><div class="kid-keyboard" id="kidKeyboard">${rows.join('')}</div><div class="row"><button class="btn ghost" id="finishTyping">Завершить занятие</button></div></div>`);
+  renderKidText();renderKeyboard();
+  $('kidKeyboard').addEventListener('mousedown',e=>{if(e.target.closest('.kid-key'))e.preventDefault();});
+  $('kidKeyboard').addEventListener('click',e=>{const btn=e.target.closest('.kid-key');if(!btn)return;const key=btn.dataset.key;keyDown(key==='space'?[' ']:[key],null);});
+  document.addEventListener('keydown',handlePhysicalKey,true);
   $('finishTyping').onclick=()=>finishTyping(false);
   timerHandle=setInterval(()=>{remaining=Math.max(0,600-Math.floor((Date.now()-startedAt)/1000));$('timerText').textContent=fmtTime(remaining);const chip=$('timerChip');chip.className='timerchip '+(remaining<=60?'danger':remaining<=180?'warn':'run');if(remaining===0)finishTyping(true);},250);
 }
-
-function measure(){
-  const target=currentLesson.content;const typed=$('typingInput')?.value||'';let correct=0,errors=0;
-  for(let i=0;i<typed.length;i++){if(i<target.length&&typed[i]===target[i])correct++;else errors++;}
-  errors = Math.max(errors, mistakeCount);
-  const elapsed=Math.max(1,Math.min(600,Math.floor((Date.now()-startedAt)/1000)));
-  const speed=Math.round(correct/(elapsed/60));const accuracy=(correct+errors)?Math.round(correct/(correct+errors)*100):100;
-  return {typed,correct,errors,elapsed,speed,accuracy};
+function renderKidText(){
+  const target=currentLesson.content;const chars=[...target];const line=$('kidTextLine');if(!line)return;
+  line.innerHTML=chars.map((c,i)=>`<span class="kid-char ${i<typedCount?'done':i===typedCount?'current':'pending'}" data-index="${i}">${c===' '?'\u00a0':esc(c)}</span>`).join('');
+  const cur=line.querySelector('.current');if(cur){const win=$('kidTextWindow');const desired=win.clientHeight*.35;const top=cur.offsetTop;win.scrollTo({top:Math.max(0,top-desired),behavior:'smooth'});}
 }
-function updateLiveStats(){const m=measure();$('liveSpeed').textContent=m.speed;$('liveErrors').textContent=m.errors;$('liveAccuracy').textContent=m.accuracy+'%';$('progressMeter').style.width=Math.min(100,m.correct/Math.max(1,currentLesson.content.length)*100)+'%';}
+function renderKeyboard(){
+  const expected=neededKey(currentChar());document.querySelectorAll('.kid-key').forEach(b=>{b.classList.toggle('next-key',b.dataset.key===expected);});
+}
+function flashKey(key,ok){const btn=[...document.querySelectorAll('.kid-key')].find(b=>b.dataset.key===key);if(!btn)return;btn.classList.remove('flash-ok','flash-bad');void btn.offsetWidth;btn.classList.add(ok?'flash-ok':'flash-bad');setTimeout(()=>btn.classList.remove('flash-ok','flash-bad'),280);}
+function keyDown(candidates,physicalCode){if(resultSaved||typedCount>=[...currentLesson.content].length)return;const expected=currentChar();const expectedNorm=expected===' '?' ':normChar(expected);const ok=candidates.some(c=>(c===' '?' ':normChar(c))===expectedNorm);const displayKey=expected===' '?'space':(physicalCode&&codeMap[physicalCode]?codeMap[physicalCode]:candidates[0]||'');flashKey(displayKey,ok);
+  if(ok){typedCount++;activeElapsedMs+=Math.max(0,Date.now()-lastActivityAt);lastActivityAt=Date.now();playTone('hit');renderKidText();renderKeyboard();updateLiveStats();$('kidHint').textContent=typedCount>=[...currentLesson.content].length?'Ура! Текст напечатан!':'Отлично! Ищи следующую жёлтую клавишу.';if(typedCount>=[...currentLesson.content].length){playTone('win');finishTyping(false);}}
+  else{mistakeCount++;playTone('miss');const wrap=$('kidTextWrap');wrap.classList.remove('shake');void wrap.offsetWidth;wrap.classList.add('shake');$('kidHint').textContent=expected===' '?'Нужен пробел — большая жёлтая клавиша внизу':`Ищи «${expected}» — она светится на клавиатуре`;$('liveErrors').textContent=mistakeCount;$('liveAccuracy').textContent=calcAccuracy()+'%';}
+}
+function handlePhysicalKey(e){if(e.ctrlKey||e.altKey||e.metaKey)return;const active=document.activeElement;if(active&&(/INPUT|TEXTAREA|SELECT/.test(active.tagName)||active.isContentEditable))return;if(e.key==='Backspace'||e.key==='Tab'||e.key==='Enter'||e.key==='Escape')return;const candidates=candidatesFor(e);if(!candidates.length)return;e.preventDefault();keyDown(candidates,e.code);}
+function calcAccuracy(){return typedCount+mistakeCount?Math.round(typedCount/(typedCount+mistakeCount)*100):100;}
+function measure(){const elapsed=Math.max(1,Math.min(600,Math.floor((Date.now()-startedAt)/1000)));const activeSeconds=activeElapsedMs/1000;const speed=activeSeconds>=5?Math.round(typedCount/(activeSeconds/60)):0;return {typed:currentLesson.content.slice(0,typedCount),correct:typedCount,errors:mistakeCount,elapsed,speed,accuracy:calcAccuracy()};}
+function updateLiveStats(){const m=measure();$('liveSpeed').textContent=(activeElapsedMs/1000>=5?m.speed:'—');$('liveErrors').textContent=m.errors;$('liveAccuracy').textContent=m.accuracy+'%';$('progressMeter').style.width=(typedCount/Math.max(1,[...currentLesson.content].length)*100)+'%';$('progressLabel').textContent=`Напечатано ${typedCount} из ${[...currentLesson.content].length} знаков`;}
 async function finishTyping(timeUp){
-  if(resultSaved)return;resultSaved=true;if(timerHandle)clearInterval(timerHandle);
-  const m=measure();
-  const payload={p_group_id:currentGroup.id,p_student_id:currentStudent.id,p_lesson_id:currentLesson.id,p_duration_seconds:m.elapsed,p_typed_chars:m.typed.length,p_correct_chars:m.correct,p_errors:m.errors,p_wpm:m.speed,p_accuracy:m.accuracy};
+  if(resultSaved)return;resultSaved=true;if(timerHandle)clearInterval(timerHandle);document.removeEventListener('keydown',handlePhysicalKey,true);
+  const m=measure();const payload={p_group_id:currentGroup.id,p_student_id:currentStudent.id,p_lesson_id:currentLesson.id,p_duration_seconds:m.elapsed,p_typed_chars:m.correct+m.errors,p_correct_chars:m.correct,p_errors:m.errors,p_wpm:m.speed,p_accuracy:m.accuracy};
   const {error}=await supabase.rpc('submit_typing_result',payload);
-  if(error){setPanel(`<div class="ph"><span class="tag">Результат</span><h2>Занятие завершено!</h2><p>Не получилось сохранить результат: ${esc(error.message)}</p></div><div class="metric-grid"><div class="metric"><b>${m.speed}</b><span>знаков в минуту</span></div><div class="metric"><b>${m.errors}</b><span>ошибок</span></div><div class="metric"><b>${m.accuracy}%</b><span>точность</span></div></div><button class="btn" id="homeBtn">На главную</button>`);$('homeBtn').onclick=loadGroups;return;}
-  setPanel(`<div class="ph"><span class="tag">${timeUp?'Время вышло':'Занятие завершено'}</span><h2>Отличная работа, ${esc(currentStudent.display_name)}!</h2><p>Результат сохранён. В следующий раз попробуем стать ещё быстрее и точнее.</p></div><div class="metric-grid"><div class="metric"><b>${m.speed}</b><span>знаков в минуту</span></div><div class="metric"><b>${m.errors}</b><span>ошибок</span></div><div class="metric"><b>${m.accuracy}%</b><span>точность</span></div><div class="metric"><b>${fmtTime(m.elapsed)}</b><span>время работы</span></div></div><div class="row"><button class="btn good" id="homeBtn">Готово!</button></div>`,'var(--tw-mint)');$('homeBtn').onclick=loadGroups;
+  const note=error?`Не удалось сохранить результат: ${esc(error.message)}`:'Результат сохранён для педагога.';
+  setPanel(`<div class="ph"><span class="tag">${typedCount===[...currentLesson.content].length?'Текст пройден':timeUp?'Время вышло':'Занятие завершено'}</span><h2>${typedCount===[...currentLesson.content].length?'Ура, ты справился!':`Отличная работа, ${esc(currentStudent.display_name)}!`}</h2><p>${note}</p></div><div class="metric-grid"><div class="metric"><b>${m.speed}</b><span>знаков в минуту</span></div><div class="metric"><b>${m.errors}</b><span>ошибок</span></div><div class="metric"><b>${m.accuracy}%</b><span>точность</span></div><div class="metric"><b>${fmtTime(m.elapsed)}</b><span>время занятия</span></div></div><div class="row"><button class="btn good" id="homeBtn">Готово!</button></div>`,'var(--tw-mint)');$('homeBtn').onclick=loadGroups;
 }
-
 // Кабинет педагога
 $('teacherBtn').addEventListener('click',()=>{teacherOverlay.hidden=false;renderTeacher();});
 $('closeTeacher').addEventListener('click',()=>teacherOverlay.hidden=true);
