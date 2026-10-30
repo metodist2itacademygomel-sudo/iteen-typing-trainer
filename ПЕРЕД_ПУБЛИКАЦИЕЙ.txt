@@ -1,0 +1,6 @@
+1. Создать Supabase project.
+2. Выполнить supabase/schema.sql в SQL Editor.
+3. Создать двух педагогов в Authentication -> Users.
+4. Заполнить config.js значениями Project URL и anon/publishable key.
+5. Загрузить все файлы в GitHub repository.
+6. Settings -> Pages -> Source: GitHub Actions.

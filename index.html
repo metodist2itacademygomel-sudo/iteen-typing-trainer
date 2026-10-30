@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Клавиатурный тренажёр — ITeen Academy</title>
+  <meta name="description" content="Тренажёр печати для учеников: педагог задаёт текст, у ученика 10 минут на тренировку.">
+  <link rel="stylesheet" href="assets/original-design.css"><link rel="stylesheet" href="assets/fonts.css"><link rel="stylesheet" href="assets/app.css">
+  <link rel="icon" href="assets/logo.svg">
+  <script src="config.js"></script>
+  <script type="module" src="assets/app.js"></script>
+</head>
+<body style="margin:0;background:#e6f4ff">
+<div class="tr-world">
+  <div class="deco" aria-hidden="true"><i style="--x:6%;--y:16%;--s:26px;--c:var(--tw-sun);--a:12deg;--d:9s"></i><i style="--x:88%;--y:10%;--s:34px;--c:var(--tw-grape);--a:30deg;--d:12s"></i><i style="--x:92%;--y:46%;--s:20px;--c:var(--tw-mint);--r:50%;--d:8s"></i><i style="--x:3%;--y:52%;--s:30px;--c:var(--tw-sky);--r:50%;--d:11s"></i><i style="--x:12%;--y:84%;--s:22px;--c:var(--tw-berry);--a:20deg;--d:10s"></i><i style="--x:80%;--y:86%;--s:28px;--c:var(--tw-sun);--a:45deg;--d:13s"></i></div>
+  <div class="wrap">
+    <header>
+      <div class="top"><p class="eyebrow">ITeen Academy · тренажёр печати</p><span class="row" style="gap:10px"><button class="snd" id="soundBtn" type="button" aria-pressed="false">♫ <span>Звук выключен</span></button><button class="tbtn" id="teacherBtn" type="button">Для педагога</button></span></div>
+      <h1><span class="a">Клавиатурный</span> <span class="b">тренажёр</span></h1>
+      <p class="lead" id="lead">Выбери свою группу и найди своё имя — впереди 10 минут тренировки!</p>
+    </header>
+    <main class="panel" id="mainPanel" style="--mc:var(--tw-sky)"><p class="count" style="text-align:center;padding:30px 0">Подключаем тренажёр…</p></main>
+    <p class="count" style="text-align:center">ITeen Academy · курс «IT старт» · у каждого ученика свои 10 минут</p>
+  </div>
+  <canvas class="tr-confetti" aria-hidden="true"></canvas>
+</div>
+<div id="teacherOverlay" class="tp-veil" hidden><section class="tp-card" role="dialog" aria-modal="true" aria-labelledby="teacherTitle"><div class="tp-head"><h3 id="teacherTitle">Кабинет педагога</h3><button class="btn ghost small" id="closeTeacher">Закрыть</button></div><div id="teacherContent"><div class="tp-gate"><p class="tp-note">Войдите, чтобы управлять своей группой</p><label class="lab" for="teacherEmail">Электронная почта</label><input class="fld" id="teacherEmail" type="email" autocomplete="username" placeholder="name@example.com"><label class="lab" for="teacherPassword">Пароль</label><input class="fld" id="teacherPassword" type="password" autocomplete="current-password" placeholder="Пароль"><button class="btn grape" id="loginBtn">Войти в кабинет</button><p class="tp-note" id="loginMessage">Учётные записи педагогов создаются администратором проекта.</p></div></div></section></div>
+</body></html>
